@@ -58,8 +58,14 @@ regioes = {
     'Tocantins': 'Norte'
 }
 
-# Configurar locale para formatação de números
-locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
+try:
+    locale.setlocale(locale.LC_ALL, 'pt_BR.UTF-8')
+except:
+    try:
+        locale.setlocale(locale.LC_ALL, 'Portuguese_Brazil.1252')
+    except:
+        locale.setlocale(locale.LC_ALL, '')
+
 
 # Carregar os dados
 @st.cache_data
