@@ -4,6 +4,8 @@ import plotly.express as px
 import locale
 from streamlit_extras.metric_cards import style_metric_cards
 import plotly.graph_objects as go
+from models.xgb_model import train_model, predict_idh
+from utils.data_prep import load_and_filter_data, get_municipality_data
 
 # Configuração da página
 st.set_page_config(page_title="PredictGov", page_icon="📊", layout="wide")
@@ -14,7 +16,6 @@ if 'page' not in st.session_state:
 
 if 'selected_municipality' not in st.session_state:
     st.session_state.selected_municipality = None
-
 
 # Função para classificar IDH
 def classificar_idh(valor):
@@ -70,8 +71,6 @@ except:
 # Carregar os dados
 @st.cache_data
 def load_data():
-    #df = pd.read_csv('novo_dataset.csv')
-    #df = pd.read_excel('Cidade_Sirius.xlsx')
     df = pd.read_csv('df_exported.csv')
     df['regiao'] = df['estado'].map(regioes)
     df['classificacao_idh'] = df['IDH'].apply(classificar_idh)
@@ -181,7 +180,8 @@ elif st.session_state.page == 'filter_state':
     )
     
     if estado_selecionado:
-        df_estado = df[df['estado'] == estado_selecionado]
+        # Criar uma cópia explícita do DataFrame filtrado
+        df_estado = df[df['estado'] == estado_selecionado].copy()
         
         # Criar duas colunas principais
         col_graf, col_metricas = st.columns([0.7, 0.3], gap="large")
@@ -192,6 +192,7 @@ elif st.session_state.page == 'filter_state':
             df_estado['faixa_idh'] = df_estado['IDH'].apply(classificar_idh)
             df_contagem = df_estado['faixa_idh'].value_counts().reset_index()
             df_contagem.columns = ['Faixa', 'Quantidade']
+
             
             fig_dist = px.bar(df_contagem, 
                             x='Faixa', 
@@ -406,503 +407,474 @@ elif st.session_state.page == 'municipality_detail':
             """, unsafe_allow_html=True)
 
         with col4:
-            prod_diff = df_mun['Produtividade'] - df_estado['Produtividade'].mean()
-            color = "red" if prod_diff < 0 else "gray"
+            salario_diff = df_mun['Média Salarial'] - df_estado['Média Salarial'].mean()
+            color = "red" if salario_diff < 0 else "gray"
             st.markdown(f"""
-                <h3 style='margin: 0; font-size: 1rem; font-weight: 600'>Produtividade</h3>
-                <p style='font-size: 2rem; margin: 0'>R$ {df_mun['Produtividade']:,.2f}</p>
-                <p style='color: {color}; margin: 0'>Média estadual: R$ {df_estado['Produtividade'].mean():,.2f}</p>
+                <h3 style='margin: 0; font-size: 1rem; font-weight: 600'>Média Salarial</h3>
+                <p style='font-size: 2rem; margin: 0'>R$ {df_mun['Média Salarial']:,.2f}</p>
+                <p style='color: {color}; margin: 0'>Média estadual: R$ {df_estado['Média Salarial'].mean():,.2f}</p>
             """, unsafe_allow_html=True)
 
+
         st.markdown("---")
 
-        # Comparativo com médias
-        st.markdown("<br><br>", unsafe_allow_html=True)  # Adiciona espaço vertical
-        st.subheader("Análise Comparativa")
 
-        # Criar DataFrame para o gráfico de radar
-        metricas = ['IDH', '% de pobres', 'Produtividade', 'PIB Municipal']
-        valores_mun = [df_mun[m] for m in metricas]
-        valores_estado = [df_estado[m].mean() for m in metricas]
+        # SEÇÃO DE TABELAS DE INDICADORES SOCIOECONOMICOS E INFRAESTRUTURA
 
-        # Normalizar os valores para melhor comparação
-        max_valores = {
-            'IDH': 1,
-            '% de pobres': 100,
-            'Produtividade': max(df_estado['Produtividade'].max(), df_mun['Produtividade']),
-            'PIB Municipal': max(df_estado['PIB Municipal'].max(), df_mun['PIB Municipal'])
+        # Título da seção
+        st.markdown("<h3 style='margin: 20px 0; font-size: 1.1rem; font-weight: bold;'>Diagnóstico por Área</h3>", unsafe_allow_html=True)
+
+        # Tabela de Educação
+        st.markdown("<h4 style='margin: 10px 0; font-size: 1rem; font-weight: bold;'>Educação</h4>", unsafe_allow_html=True)
+
+        # Correlações com IDH
+        education_correlations = {
+            'Ativos com Alto Nível Educacional': 0.579211,
+            'Ativos com Médio Nível Educacional': 0.330341,
+            'Ativos com Baixo Nível Educacional': -0.483055
         }
 
-        valores_mun_norm = [df_mun[m]/max_valores[m] for m in metricas]
-        valores_estado_norm = [df_estado[m].mean()/max_valores[m] for m in metricas]
+        # Primeiro calcular as diferenças
+        differences = []
+        for indicator in ['Ativos com Alto Nível Educacional', 'Ativos com Médio Nível Educacional', 'Ativos com Baixo Nível Educacional']:
+            local_val = float(df_mun[indicator])
+            national_val = df[indicator].mean()
+            diff = local_val - national_val
+            color = 'red' if diff < 0 else 'green'
+            differences.append(f"<span style='color: {color}'>{'+'if diff > 0 else ''}{diff:.1f}%</span>")
 
-        # Criar DataFrame no formato correto para o gráfico polar
-        df_radar = pd.DataFrame({
-            'Métrica': metricas * 2,
-            'Valor': valores_mun_norm + valores_estado_norm,
-            'Tipo': ['Município'] * 4 + ['Média Estadual'] * 4
-        })
+        # Depois criar o dicionário com todas as colunas na ordem correta
+        education_data = {
+            'Indicador': [
+                'Ativos com Alto Nível Educacional',
+                'Ativos com Médio Nível Educacional',
+                'Ativos com Baixo Nível Educacional'
+            ],
+            'Índice Local': [
+                f"{df_mun['Ativos com Alto Nível Educacional']:.1f}%",
+                f"{df_mun['Ativos com Médio Nível Educacional']:.1f}%",
+                f"{df_mun['Ativos com Baixo Nível Educacional']:.1f}%"
+            ],
+            'Média Estadual': [
+                f"{df_estado['Ativos com Alto Nível Educacional'].mean():.1f}%",
+                f"{df_estado['Ativos com Médio Nível Educacional'].mean():.1f}%",
+                f"{df_estado['Ativos com Baixo Nível Educacional'].mean():.1f}%"
+            ],
+            'Média Nacional': [
+                f"{df['Ativos com Alto Nível Educacional'].mean():.1f}%",
+                f"{df['Ativos com Médio Nível Educacional'].mean():.1f}%",
+                f"{df['Ativos com Baixo Nível Educacional'].mean():.1f}%"
+            ],
+            'Diferença p/ Média Nacional': differences,
+            'Correlação c/ IDH': [
+                f"{education_correlations['Ativos com Alto Nível Educacional']:.3f}",
+                f"{education_correlations['Ativos com Médio Nível Educacional']:.3f}",
+                f"{education_correlations['Ativos com Baixo Nível Educacional']:.3f}"
+            ]
+        }
 
-        # Gráfico de radar melhorado
-        fig = px.line_polar(
-            df_radar,
-            r='Valor',
-            theta='Métrica',
-            color='Tipo',
-            line_close=True,
-            color_discrete_sequence=['#2ecc71', '#3498db'],  # Cores mais agradáveis
-            title='Comparativo de Indicadores'
+
+        # Criar e exibir a tabela
+        df_education = pd.DataFrame(education_data)
+
+        # Estilizar a tabela
+        styled_table = (df_education.style
+            .hide(axis='index')  # Remove a coluna de índice
+            .set_properties(**{
+                'text-align': 'center',
+                'padding': '8px'
+            })
+            .set_table_styles([
+                {'selector': 'th', 'props': [
+                    ('text-align', 'center'),
+                    ('font-weight', 'bold'),
+                    ('background-color', '#f0f2f6'),
+                    ('padding', '8px')
+                ]},
+                {'selector': 'td', 'props': [
+                    ('text-align', 'center'),
+                    ('padding', '8px')
+                ]}
+            ])
         )
 
-        # Melhorar o layout do gráfico
-        fig.update_layout(
-            polar=dict(
-                radialaxis=dict(
-                    visible=True,
-                    range=[0, 1],
-                    tickformat='.0%',  # Formato percentual
-                    showticklabels=True
-                ),
-                angularaxis=dict(
-                    direction="clockwise",
-                    period=4
-                )
-            ),
-            showlegend=True,
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.1,
-                xanchor="right",
-                x=1
-            ),
-            margin=dict(t=100, b=50),  # Aumentar margens
-            height=500  # Altura fixa para melhor visualização
+        # Exibir a tabela estilizada
+        st.markdown(styled_table.to_html(), unsafe_allow_html=True)
+        
+
+        # TABELA DE EMPREGO E RENDA
+        st.markdown("<h4 style='margin: 10px 0; font-size: 1rem; font-weight: bold;'>Emprego e Renda</h4>", unsafe_allow_html=True)
+
+        # Correlações com IDH para Emprego e Renda
+        income_correlations = {
+            '% de pobres': -0.819975,
+            'Média Salarial': 0.228485,
+            'Produtividade': 0.287524
+        }
+
+        # Primeiro calcular as diferenças
+        income_differences = []
+        for indicator in ['% de pobres', 'Média Salarial', 'Produtividade']:
+            local_val = float(df_mun[indicator])
+            national_val = df[indicator].mean()
+            diff = local_val - national_val
+            
+            if indicator == '% de pobres':
+                color = 'red' if diff > 0 else 'green'  # Invertido para % de pobres (menor é melhor)
+                income_differences.append(f"<span style='color: {color}'>{'+'if diff > 0 else ''}{diff:.1f}%</span>")
+            else:  # Para Média Salarial e Produtividade
+                color = 'red' if diff < 0 else 'green'
+                income_differences.append(f"<span style='color: {color}'>{'+'if diff > 0 else ''}R$ {diff:,.2f}</span>")
+
+        # Depois criar o dicionário com todas as colunas na ordem correta
+        income_data = {
+            'Indicador': [
+                '% de pobres',
+                'Média Salarial',
+                'Produtividade'
+            ],
+            'Índice Local': [
+                f"{df_mun['% de pobres']:.1f}%",
+                f"R$ {df_mun['Média Salarial']:,.2f}",
+                f"R$ {df_mun['Produtividade']:,.2f}"
+            ],
+            'Média Estadual': [
+                f"{df_estado['% de pobres'].mean():.1f}%",
+                f"R$ {df_estado['Média Salarial'].mean():,.2f}",
+                f"R$ {df_estado['Produtividade'].mean():,.2f}"
+            ],
+            'Média Nacional': [
+                f"{df['% de pobres'].mean():.1f}%",
+                f"R$ {df['Média Salarial'].mean():,.2f}",
+                f"R$ {df['Produtividade'].mean():,.2f}"
+            ],
+            'Diferença p/ Média Nacional': income_differences,
+            'Correlação c/ IDH': [
+                f"{income_correlations['% de pobres']:.3f}",
+                f"{income_correlations['Média Salarial']:.3f}",
+                f"{income_correlations['Produtividade']:.3f}"
+            ]
+        }
+
+        # Criar e exibir a tabela
+        df_income = pd.DataFrame(income_data)
+
+
+        # Estilizar a tabela
+        styled_table = (df_income.style
+            .hide(axis='index')  # Remove a coluna de índice
+            .set_properties(**{
+                'text-align': 'center',
+                'padding': '8px'
+            })
+            .set_table_styles([
+                {'selector': 'th', 'props': [
+                    ('text-align', 'center'),
+                    ('font-weight', 'bold'),
+                    ('background-color', '#f0f2f6'),
+                    ('padding', '8px')
+                ]},
+                {'selector': 'td', 'props': [
+                    ('text-align', 'center'),
+                    ('padding', '8px')
+                ]}
+            ])
         )
 
-        # Adicionar espaço vertical antes do gráfico
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.plotly_chart(fig, use_container_width=True)
-        # Adicionar espaço vertical após o gráfico
-        st.markdown("<br>", unsafe_allow_html=True)
+        # Exibir a tabela estilizada
+        st.markdown(styled_table.to_html(), unsafe_allow_html=True)
 
-        st.markdown("---")
 
-        # Diagnóstico de Áreas Críticas
+        # TABELA DE INFRAESTRUTURA E RECURSOS DE SAÚDE
+        st.markdown("<h4 style='margin: 10px 0; font-size: 1rem; font-weight: bold;'>Infraestrutura e Recursos de Saúde</h4>", unsafe_allow_html=True)
 
-        # Antes da seção de diagnóstico, calcular as médias estaduais
+        # Correlações com IDH para Infraestrutura e Saúde
+        health_correlations = {
+            'Taxa de Saneamento Básico': 0.361888,
+            'Médicos por milhares de habitantes': 0.298360,
+            'Hospitais por milhares de habitantes': 0.275911
+        }
+
+        # Primeiro calcular as diferenças
+        health_differences = []
+        for indicator in ['Taxa de Saneamento Básico', 'Médicos por milhares de habitantes', 'Hospitais por milhares de habitantes']:
+            local_val = float(df_mun[indicator])
+            national_val = df[indicator].mean()
+            diff = local_val - national_val
+            color = 'red' if diff < 0 else 'green'
+            health_differences.append(f"<span style='color: {color}'>{'+'if diff > 0 else ''}{diff:.3f}</span>")  # Para médicos e hospitais
+
+        # Depois criar o dicionário com todas as colunas na ordem correta
+        health_data = {
+            'Indicador': [
+                'Taxa de Saneamento Básico',
+                'Médicos por milhares de habitantes',
+                'Hospitais por milhares de habitantes'
+            ],
+            'Índice Local': [
+                f"{df_mun['Taxa de Saneamento Básico']:.1f}%",
+                f"{df_mun['Médicos por milhares de habitantes']:.3f}",
+                f"{df_mun['Hospitais por milhares de habitantes']:.3f}"
+            ],
+            'Média Estadual': [
+                f"{df_estado['Taxa de Saneamento Básico'].mean():.1f}%",
+                f"{df_estado['Médicos por milhares de habitantes'].mean():.3f}",
+                f"{df_estado['Hospitais por milhares de habitantes'].mean():.3f}"
+            ],
+            'Média Nacional': [
+                f"{df['Taxa de Saneamento Básico'].mean():.1f}%",
+                f"{df['Médicos por milhares de habitantes'].mean():.3f}",
+                f"{df['Hospitais por milhares de habitantes'].mean():.3f}"
+            ],
+            'Diferença p/ Média Nacional': health_differences,
+            'Correlação c/ IDH': [
+                f"{health_correlations['Taxa de Saneamento Básico']:.3f}",
+                f"{health_correlations['Médicos por milhares de habitantes']:.3f}",
+                f"{health_correlations['Hospitais por milhares de habitantes']:.3f}"
+            ]
+        }
+
+        # Criar e exibir a tabela
+        df_health = pd.DataFrame(health_data)
+
+        # Estilizar a tabela
+        styled_table = (df_health.style
+            .hide(axis='index')
+            .set_properties(**{
+                'text-align': 'center',
+                'padding': '8px'
+            })
+            .set_table_styles([
+                {'selector': 'th', 'props': [
+                    ('text-align', 'center'),
+                    ('font-weight', 'bold'),
+                    ('background-color', '#f0f2f6'),
+                    ('padding', '8px')
+                ]},
+                {'selector': 'td', 'props': [
+                    ('text-align', 'center'),
+                    ('padding', '8px')
+                ]}
+            ])
+        )
+
+        # Exibir a tabela estilizada
+        st.markdown(styled_table.to_html(), unsafe_allow_html=True)
+
+        # SEÇÃO DE RECOMENDAÇÕES
+
+        # Adicionar espaço e separador
+        st.markdown("<br><hr style='margin: 30px 0; border: 0.5px solid #e6e6e6;'><br>", unsafe_allow_html=True)
+
+        # Título da seção
+        st.markdown("<h3 style='margin: 20px 0; font-size: 1.1rem; font-weight: bold;'>Recomendações por Área</h3>", unsafe_allow_html=True)
+
+        # VARIÁVEIS PARA A SEÇÃO DE RECOMENDAÇÕES
+        # Calcular as médias estaduais
         media_alto_estado = df_estado['Ativos com Alto Nível Educacional'].mean()
         media_baixo_estado = df_estado['Ativos com Baixo Nível Educacional'].mean()
         media_pobres = df_estado['% de pobres'].mean()
         media_saneamento_estado = df_estado['Taxa de Saneamento Básico'].mean()
 
-        # Agora podemos usar essas variáveis na seção de diagnóstico
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.subheader("Diagnóstico de Áreas Críticas")
+        # Calcular médias nacionais
+        media_nacional_alto = df['Ativos com Alto Nível Educacional'].mean()
+        media_nacional_baixo = df['Ativos com Baixo Nível Educacional'].mean()
+        media_nacional_pobres = df['% de pobres'].mean()
+        media_nacional_saneamento = df['Taxa de Saneamento Básico'].mean()
+            
+        # Médicos por mil habitantes
+        medicos = df_mun['Médicos por milhares de habitantes']
+        media_estado_medicos = df_estado['Médicos por milhares de habitantes'].mean()
+        media_nacional_medicos = df['Médicos por milhares de habitantes'].mean()
 
-        col1, col2 = st.columns(2)
+        # Hospitais por mil habitantes
+        hospitais = df_mun['Hospitais por milhares de habitantes']
+        media_estado_hospitais = df_estado['Hospitais por milhares de habitantes'].mean()
+        media_nacional_hospitais = df['Hospitais por milhares de habitantes'].mean()
+            
+        # Educação
+        alto_nivel = df_mun['Ativos com Alto Nível Educacional']
+        medio_nivel = df_mun['Ativos com Médio Nível Educacional']
+        baixo_nivel = df_mun['Ativos com Baixo Nível Educacional']
+
+        # Percentual de Pobres
+        pobres = df_mun['% de pobres']
+        diferenca_pobres = pobres - media_nacional_pobres
+
+        # Taxa de Saneamento Básico
+        saneamento = df_mun['Taxa de Saneamento Básico']
+        diferenca_saneamento = saneamento - media_nacional_saneamento
+
+        # Criar três colunas para as recomendações
+        col1, col2, col3 = st.columns(3)
 
         with col1:
-            # Indicadores Críticos
-            st.markdown("<p style='font-size: 1.1rem; font-weight: bold;'>Indicadores Críticos</p>", unsafe_allow_html=True)
-            
-            # Calcular médias nacionais
-            media_nacional_alto = df['Ativos com Alto Nível Educacional'].mean()
-            media_nacional_baixo = df['Ativos com Baixo Nível Educacional'].mean()
-            media_nacional_pobres = df['% de pobres'].mean()
-            media_nacional_saneamento = df['Taxa de Saneamento Básico'].mean()
-            
-            # Médicos por mil habitantes
-            medicos = df_mun['Médicos por milhares de habitantes']
-            media_estado_medicos = df_estado['Médicos por milhares de habitantes'].mean()
-            media_nacional_medicos = df['Médicos por milhares de habitantes'].mean()
-
-            # Hospitais por mil habitantes
-            hospitais = df_mun['Hospitais por milhares de habitantes']
-            media_estado_hospitais = df_estado['Hospitais por milhares de habitantes'].mean()
-            media_nacional_hospitais = df['Hospitais por milhares de habitantes'].mean()
-            
-            # Educação
-            st.markdown("<p style='font-weight: bold;'>Educação:</p>", unsafe_allow_html=True)
-            alto_nivel = df_mun['Ativos com Alto Nível Educacional']
-            medio_nivel = df_mun['Ativos com Médio Nível Educacional']
-            baixo_nivel = df_mun['Ativos com Baixo Nível Educacional']
-
-            # Alto Nível Educacional
-            st.markdown("""
-            • Ativos com Alto Nível Educacional:
-            <div style='margin-left: 20px;'>
-                Local: {:.1f}%<br>
-                Média Estadual: {:.1f}%<br>
-                Média Nacional: {:.1f}%
-            </div>
-            <div style='margin-left: 20px; margin-bottom: 10px; color: {};'>
-                Diferença do município comparado à média nacional: {}{:.1f}%
-            </div>
-            <hr style='margin: 10px 0; border: 0.5px solid #e6e6e6;'>
-            """.format(
-                alto_nivel,
-                media_alto_estado,
-                media_nacional_alto,
-                "red" if (alto_nivel - media_nacional_alto) < 0 else "gray",
-                "" if (alto_nivel - media_nacional_alto) > 0 else "-",
-                abs(alto_nivel - media_nacional_alto)
-            ), unsafe_allow_html=True)
-
-            # Médio Nível Educacional
-            st.markdown("""
-            • Ativos com Médio Nível Educacional:
-            <div style='margin-left: 20px;'>
-                Local: {:.1f}%<br>
-                Média Estadual: {:.1f}%<br>
-                Média Nacional: {:.1f}%
-            </div>
-            <div style='margin-left: 20px; margin-bottom: 10px; color: {};'>
-                Diferença do município comparado à média nacional: {}{:.1f}%
-            </div>
-            <hr style='margin: 10px 0; border: 0.5px solid #e6e6e6;'>
-            """.format(
-                medio_nivel,
-                df_estado['Ativos com Médio Nível Educacional'].mean(),
-                df['Ativos com Médio Nível Educacional'].mean(),
-                "red" if (medio_nivel - df['Ativos com Médio Nível Educacional'].mean()) < 0 else "gray",
-                "+" if (medio_nivel - df['Ativos com Médio Nível Educacional'].mean()) > 0 else "-",
-                abs(medio_nivel - df['Ativos com Médio Nível Educacional'].mean())
-            ), unsafe_allow_html=True)
-            
-            # Baixo Nível Educacional
-            st.markdown("""
-            • Ativos com Baixo Nível Educacional:
-            <div style='margin-left: 20px;'>
-                Local: {:.1f}%<br>
-                Média Estadual: {:.1f}%<br>
-                Média Nacional: {:.1f}%
-            </div>
-            <div style='margin-left: 20px; margin-bottom: 10px; color: {};'>
-                Diferença do município comparado à média nacional: {}{:.1f}%
-            </div>
-            <hr style='margin: 10px 0; border: 0.5px solid #e6e6e6;'>
-            """.format(
-                baixo_nivel,
-                media_baixo_estado,
-                media_nacional_baixo,
-                "red" if (baixo_nivel - media_nacional_baixo) > 0 else "gray",
-                "+" if (baixo_nivel - media_nacional_baixo) > 0 else "-",
-                abs(baixo_nivel - media_nacional_baixo)
-            ), unsafe_allow_html=True)
-
-            # Indicadores Socioeconômicos e Infraestrutura
-            st.markdown("<p style='font-weight: bold;'>Indicadores Socioeconômicos e Infraestrutura:</p>", unsafe_allow_html=True)
-            
-            # Percentual de Pobres
-            pobres = df_mun['% de pobres']
-            diferenca_pobres = pobres - media_nacional_pobres
-            st.markdown("""
-            • Percentual de Pobres:
-            <div style='margin-left: 20px;'>
-                Local: {:.1f}%<br>
-                Média Estadual: {:.1f}%<br>
-                Média Nacional: {:.1f}%
-            </div>
-            <div style='margin-left: 20px; margin-bottom: 10px; color: {};'>
-                Diferença do município comparado à média nacional: {}{:.1f}%
-            </div>
-            <hr style='margin: 10px 0; border: 0.5px solid #e6e6e6;'>
-            """.format(
-                pobres,
-                media_pobres,
-                media_nacional_pobres,
-                "red" if (pobres - media_nacional_pobres) > 0 else "gray",
-                "+" if (pobres - media_nacional_pobres) > 0 else "-",
-                abs(pobres - media_nacional_pobres)
-            ), unsafe_allow_html=True)
-            
-            # Taxa de Saneamento Básico
-            saneamento = df_mun['Taxa de Saneamento Básico']
-            diferenca_saneamento = saneamento - media_nacional_saneamento
-            st.markdown("""
-            • Taxa de Saneamento Básico:
-            <div style='margin-left: 20px;'>
-                Local: {:.1f}%<br>
-                Média Estadual: {:.1f}%<br>
-                Média Nacional: {:.1f}%
-            </div>
-            <div style='margin-left: 20px; margin-bottom: 10px; color: {};'>
-                Diferença do município comparado à média nacional: {}{:.1f}%
-            </div>
-            """.format(
-                saneamento,
-                media_saneamento_estado,
-                media_nacional_saneamento,
-                "red" if (saneamento - media_nacional_saneamento) < 0 else "gray",
-                "+" if (saneamento - media_nacional_saneamento) > 0 else "-",
-                abs(saneamento - media_nacional_saneamento)
-            ), unsafe_allow_html=True)
-
-        with col2:
-            st.markdown("<p style='font-size: 1.1rem; font-weight: bold;'>Recomendações Prioritárias</p>", unsafe_allow_html=True)
-            st.markdown("<p style='color: gray; font-size: 0.9rem;'>Com base na análise dos indicadores, sugerimos:</p>", unsafe_allow_html=True)
-            
-            recomendacoes = []
-            
+            st.markdown("<h4 style='font-size: 1rem; font-weight: bold;'>Educação</h4>", unsafe_allow_html=True)
+            recomendacoes_educacao = []
             if alto_nivel < media_nacional_alto:
-                recomendacoes.append("• Investir em programas de educação superior e qualificação profissional")
+                recomendacoes_educacao.append("• Investir em programas de educação superior e qualificação profissional")
             if medio_nivel < df['Ativos com Médio Nível Educacional'].mean():
-                recomendacoes.append("• Fortalecer programas de ensino técnico e profissionalizante")
+                recomendacoes_educacao.append("• Fortalecer programas de ensino técnico e profissionalizante")
             if baixo_nivel > media_nacional_baixo:
-                recomendacoes.append("• Desenvolver programas de redução da evasão escolar e educação de jovens e adultos")
-            if pobres > media_nacional_pobres:
-                recomendacoes.append("• Desenvolver programas de geração de emprego e renda")
-                recomendacoes.append("• Criar iniciativas de capacitação profissional")
-            if saneamento < media_nacional_saneamento:
-                recomendacoes.append("• Ampliar investimentos em infraestrutura de saneamento básico")
-            if medicos < media_nacional_medicos:
-                recomendacoes.append("• Desenvolver programas de atração e fixação de profissionais de saúde")
-                recomendacoes.append("• Criar incentivos para estabelecimento de clínicas e consultórios médicos")
-            if hospitais < media_nacional_hospitais:
-                recomendacoes.append("• Investir na construção ou ampliação de unidades de saúde")
-                recomendacoes.append("• Estabelecer parcerias para implementação de postos de atendimento")
-
-            if not recomendacoes:
-                st.markdown("<p style='color: green;'>Município apresenta desempenho acima da média nacional nos indicadores críticos.</p>", unsafe_allow_html=True)
+                recomendacoes_educacao.append("• Desenvolver programas de redução da evasão escolar e educação de jovens e adultos")
+            
+            if not recomendacoes_educacao:
+                st.markdown("<p style='color: green;'>Indicadores educacionais acima da média nacional.</p>", unsafe_allow_html=True)
             else:
-                for rec in recomendacoes:
+                for rec in recomendacoes_educacao:
                     st.markdown(rec)
 
-        # Seção de indicadores de saúde e longevidade
-        
-        # Adicionar separação visual
-        st.markdown("<br><hr style='margin: 20px 0; border: 0.5px solid #e6e6e6;'><br>", unsafe_allow_html=True)
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.markdown("<p style='font-weight: bold;'>Infraestrutura e Recursos de Saúde</p>", unsafe_allow_html=True)
-            
-            st.markdown(f"""
-                • Médicos por mil habitantes:
-                <div style='margin-left: 20px;'>
-                    Local: {medicos:.3f}<br>
-                    Média Estadual: {media_estado_medicos:.3f}<br>
-                    Média Nacional: {media_nacional_medicos:.3f}
-                </div>
-                <div style='margin-left: 20px; margin-bottom: 10px; color: {"red" if medicos < media_nacional_medicos else "gray"}'>
-                    Diferença do município comparado à média nacional: {'+' if medicos > media_nacional_medicos else ''}{(medicos - media_nacional_medicos):.3f}
-                </div>
-                <hr style='margin: 10px 0; border: 0.5px solid #e6e6e6;'>
-                """, unsafe_allow_html=True)
-            
-            st.markdown(f"""
-                • Hospitais por mil habitantes:
-                <div style='margin-left: 20px;'>
-                    Local: {hospitais:.3f}<br>
-                    Média Estadual: {media_estado_hospitais:.3f}<br>
-                    Média Nacional: {media_nacional_hospitais:.3f}
-                </div>
-                <div style='margin-left: 20px; margin-bottom: 10px; color: {"red" if hospitais < media_nacional_hospitais else "gray"}'>
-                    Diferença do município comparado à média nacional: {'+' if hospitais > media_nacional_hospitais else ''}{(hospitais - media_nacional_hospitais):.3f}
-                </div>
-                """, unsafe_allow_html=True)
-
         with col2:
-            st.markdown("<p style='font-weight: bold;'>Indicadores Demográficos</p>", unsafe_allow_html=True)
+            st.markdown("<h4 style='font-size: 1rem; font-weight: bold;'>Emprego e Renda</h4>", unsafe_allow_html=True)
+            recomendacoes_renda = []
+            if pobres > media_nacional_pobres:
+                recomendacoes_renda.append("• Desenvolver programas de geração de emprego e renda")
+                recomendacoes_renda.append("• Criar iniciativas de capacitação profissional")
             
-            # Criar DataFrame para o gráfico
-            dados_demograficos = pd.DataFrame({
-                'Indicador': ['Óbitos até 1 ano', 'Óbitos totais', 'Nascidos'],
-                'Taxa Municipal': [
-                    df_mun['Óbitos até 1 ano de idade por milhares de habitantes'],
-                    df_mun['Óbitos por milhares de habitantes'],
-                    df_mun['Nascidos por milhares de habitantes']
-                ],
-                'Média Estadual': [
-                    df_estado['Óbitos até 1 ano de idade por milhares de habitantes'].mean(),
-                    df_estado['Óbitos por milhares de habitantes'].mean(),
-                    df_estado['Nascidos por milhares de habitantes'].mean()
-                ]
-            })
+            if not recomendacoes_renda:
+                st.markdown("<p style='color: green;'>Indicadores de renda acima da média nacional.</p>", unsafe_allow_html=True)
+            else:
+                for rec in recomendacoes_renda:
+                    st.markdown(rec)
+
+        with col3:
+            st.markdown("<h4 style='font-size: 1rem; font-weight: bold;'>Infraestrutura e Saúde</h4>", unsafe_allow_html=True)
+            recomendacoes_saude = []
+            if saneamento < media_nacional_saneamento:
+                recomendacoes_saude.append("• Ampliar investimentos em infraestrutura de saneamento básico")
+            if medicos < media_nacional_medicos:
+                recomendacoes_saude.append("• Desenvolver programas de atração e fixação de profissionais de saúde")
+                recomendacoes_saude.append("• Criar incentivos para estabelecimento de clínicas e consultórios médicos")
+            if hospitais < media_nacional_hospitais:
+                recomendacoes_saude.append("• Investir na construção ou ampliação de unidades de saúde")
+                recomendacoes_saude.append("• Estabelecer parcerias para implementação de postos de atendimento")
             
-            fig = px.bar(dados_demograficos,
-                        x='Indicador',
-                        y=['Taxa Municipal', 'Média Estadual'],
-                        barmode='group',
-                        title='Nascimentos e Óbitos por Mil Habitantes',
-                        color_discrete_sequence=['#2ecc71', '#3498db'])
-            
-            fig.update_layout(
-                height=300,
-                showlegend=True,
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom",
-                    y=1.02,
-                    xanchor="right",
-                    x=1
-                )
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
+            if not recomendacoes_saude:
+                st.markdown("<p style='color: green;'>Indicadores de saúde acima da média nacional.</p>", unsafe_allow_html=True)
+            else:
+                for rec in recomendacoes_saude:
+                    st.markdown(rec)
 
-        st.markdown("---")
-        
-        # Adicionar espaço após a seção de diagnóstico
-        st.markdown("<br><br>", unsafe_allow_html=True)
+        # Fechando todas as colunas anteriores
+        st.write("")  # Força o fechamento do contexto anterior
 
-        # Nova seção de detalhamento educacional
-        st.subheader("Detalhamento Educacional")
+        # Final da seção de recomendações
 
-        # Criar DataFrame para o gráfico de distribuição de estudantes
-        dados_educacao = pd.DataFrame({
-            'Nível': ['Ensino Primário', 'Ensino Secundário', 'Ensino Superior'],
-            'Estudantes Local': [
-                df_mun['Estudantes Ensino primário'],
-                df_mun['Estudantes Ensino secundário'],
-                df_mun['Estudantes Ensino superior']
-            ],
-            'Média Estadual': [
-                df_estado['Estudantes Ensino primário'].mean(),
-                df_estado['Estudantes Ensino secundário'].mean(),
-                df_estado['Estudantes Ensino superior'].mean()
-            ]
-        })
+        # SEÇÃO DE SIMULADOR
 
-        # Criar gráfico de barras com plotly
-        fig = go.Figure(data=[
-            go.Bar(name='Município', 
-                x=dados_educacao['Nível'], 
-                y=dados_educacao['Estudantes Local'],
-                marker_color='#2ecc71'),
-            go.Bar(name='Média Estadual', 
-                x=dados_educacao['Nível'], 
-                y=dados_educacao['Média Estadual'],
-                marker_color='#3498db')
-        ])
+        # Adicionar espaço e separador
+        st.markdown("<br><hr style='margin: 30px 0; border: 0.5px solid #e6e6e6;'><br>", unsafe_allow_html=True)
 
-        # Atualizar layout do gráfico
-        fig.update_layout(
-            title='Distribuição de Estudantes por Nível de Ensino',
-            barmode='group',
-            xaxis_title='Nível de Ensino',
-            yaxis_title='Número de Estudantes',
-            height=400,
-            showlegend=True,
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="right",
-                x=1
-            )
-        )
-
-        # Exibir o gráfico
-        st.plotly_chart(fig, use_container_width=True)
-
-        # Adicionar análise textual
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.markdown("<p style='font-size: 1.1rem; font-weight: bold;'>Análise da Distribuição</p>", unsafe_allow_html=True)
-            
-            # Calcular percentuais em relação à média estadual
-            for nivel in ['primário', 'secundário', 'superior']:
-                valor_local = df_mun[f'Estudantes Ensino {nivel}']
-                media_estado = df_estado[f'Estudantes Ensino {nivel}'].mean()
-                diff_percent = ((valor_local - media_estado) / media_estado) * 100
-                
-                st.markdown(f"""
-                • Ensino {nivel.title()}:
-                <div style='margin-left: 20px; margin-top: 0px; margin-bottom: 35px; color: {"red" if diff_percent < 0 else "gray"}'>
-                    Diferença em relação à média estadual: {'+' if diff_percent > 0 else ''}{diff_percent:.1f}%
-                </div>
-                """, unsafe_allow_html=True)
-
-
-        with col2:
-            st.markdown("<p style='font-size: 1.1rem; font-weight: bold;'>Análise da Rede de Ensino</p>", unsafe_allow_html=True)
-            
-            # Calcular total de estudantes
-            total_estudantes = (df_mun['Estudantes Ensino primário'] + 
-                            df_mun['Estudantes Ensino secundário'] + 
-                            df_mun['Estudantes Ensino superior'])
-            
-            # Calcular percentuais por nível
-            perc_primario = (df_mun['Estudantes Ensino primário'] / total_estudantes) * 100
-            perc_secundario = (df_mun['Estudantes Ensino secundário'] / total_estudantes) * 100
-            perc_superior = (df_mun['Estudantes Ensino superior'] / total_estudantes) * 100
-            
-            # População em idade escolar (jovens)
-            pop_jovem = df_mun['População residente'] * (df_mun['Porcentagem de Jovens'] / 100)
-            taxa_atendimento = (total_estudantes / pop_jovem) * 100
-            
-            st.markdown(f"""
-            • Total de Estudantes: {format(total_estudantes, ',.0f').replace(',', '.')}
-
-            • Distribuição percentual:
-            <div style='margin-left: 20px; margin-top: 2px; margin-bottom: 10px;'>
-                - Ensino Primário: {perc_primario:.1f}%<br>
-                - Ensino Secundário: {perc_secundario:.1f}%<br>
-                - Ensino Superior: {perc_superior:.1f}%
-            </div>
-            
-            • Taxa de Atendimento Escolar:
-            <div style='margin-left: 20px; margin-top: 2px; margin-bottom: 10px;'>
-                {taxa_atendimento:.1f}% da população jovem (pessoas entre 0 e 24 anos)
-            </div>
-            """, unsafe_allow_html=True)
-
-        # Relação nível educacional x renda
-            
-        # Adicionar separação visual
-        st.markdown("<br><hr style='margin: 20px 0; border: 0.5px solid #e6e6e6;'><br>", unsafe_allow_html=True)
+        # Função de callback para o reset
+        def reset_values():
+            # Atualizar diretamente os valores dos sliders para os valores iniciais
+            st.session_state.pobres = float(mun_data['% de pobres'])
+            st.session_state.alto_nivel = float(mun_data['Ativos com Alto Nível Educacional'])
+            st.session_state.medio_nivel = float(mun_data['Ativos com Médio Nível Educacional'])
+            st.session_state.media_salarial = float(mun_data['Média Salarial'])
 
         # Título da seção
-        st.markdown("<p style='font-size: 1.1rem; font-weight: bold;'>Relação Nível Educacional x Renda</p>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size: 1.1rem; font-weight: bold;'>Simulador de Investimentos</p>", unsafe_allow_html=True)
 
-        # Criar duas colunas
-        col1, col2 = st.columns(2)
+        # Carregar e treinar modelo
+        df_filtered = load_and_filter_data('df_exported.csv')
+        model, scaler, features, original_values = train_model(df_filtered)
+
+        # Dados atuais do município
+        mun_data = get_municipality_data(df_filtered, st.session_state.selected_municipality)
+
+        # Criar colunas com espaçamento aumentado
+        col1, col2 = st.columns([1, 1], gap="large")
 
         with col1:
-            # Gráfico de distribuição dos ativos por nível educacional
-            st.markdown("<p style='font-weight: bold;'>Distribuição dos Ativos por Nível Educacional</p>", unsafe_allow_html=True)
+            st.markdown("<p style='font-weight: bold; margin-bottom: 20px;'>Ajuste os Indicadores:</p>", unsafe_allow_html=True)
             
-            dados_ativos = pd.DataFrame({
-                'Nível': ['Baixo', 'Médio', 'Alto'],
-                'Percentual': [
-                    df_mun['Ativos com Baixo Nível Educacional'],
-                    df_mun['Ativos com Médio Nível Educacional'],
-                    df_mun['Ativos com Alto Nível Educacional']
-                ]
-            })
-            
-            fig = px.pie(dados_ativos, 
-                        values='Percentual', 
-                        names='Nível',
-                        color_discrete_sequence=['#2ecc71', '#f1c40f', '#e74c3c'])
-            
-            fig.update_layout(
-                height=400,
-                showlegend=True,
-                legend=dict(
-                    orientation="v",
-                    yanchor="middle",
-                    y=0.5,
-                    xanchor="left",
-                    x=0
-                )
+            # Sliders para ajuste
+            pobres = st.slider(
+                "% de pobres",
+                min_value=0.0,
+                max_value=100.0,
+                value=float(mun_data['% de pobres']),
+                key='pobres',
+                step=0.1
             )
-            st.plotly_chart(fig, use_container_width=True)
+
+            alto_nivel = st.slider(
+                "Ativos com Alto Nível Educacional (%)",
+                min_value=0.0,
+                max_value=50.0,
+                value=float(mun_data['Ativos com Alto Nível Educacional']),
+                key='alto_nivel',
+                step=0.1
+            )
+
+            medio_nivel = st.slider(
+                "Ativos com Médio Nível Educacional (%)",
+                min_value=0.0,
+                max_value=70.0,
+                value=float(mun_data['Ativos com Médio Nível Educacional']),
+                key='medio_nivel',
+                step=0.1
+            )
+
+            media_salarial = st.slider(
+                "Média Salarial (R$)",
+                min_value=500.0,
+                max_value=5000.0,
+                value=float(mun_data['Média Salarial']),
+                key='media_salarial',
+                step=50.0
+            )
+
+            # Botão de reset após os sliders
+            st.button("Resetar Valores", on_click=reset_values)
 
         with col2:
-            st.markdown("<p style='font-weight: bold;'>Indicadores de Renda por Nível Educacional</p>", unsafe_allow_html=True)
+            st.markdown("<p style='font-weight: bold; margin-bottom: 20px;'>Impacto Estimado no IDH:</p>", unsafe_allow_html=True)
             
-            # Formatação dos indicadores
-            taxa_desemprego = df_mun['Taxa de desemprego']
-            media_salarial = df_mun['Média Salarial']
+            # Preparar dados para previsão
+            input_data = pd.DataFrame({
+                'Ativos com Alto Nível Educacional': [alto_nivel],
+                'Ativos com Médio Nível Educacional': [medio_nivel],
+                'Ativos com Baixo Nível Educacional': [100 - alto_nivel - medio_nivel],
+                '% de pobres': [pobres],
+                'Média Salarial': [media_salarial]
+            })[features]  # Adicionar aqui o features para garantir a ordem correta das colunas
 
-            st.markdown(f"""
-            • Taxa de Desemprego Geral: {taxa_desemprego:.1f}%<br>
-            • Média Salarial: R$ {format(media_salarial, ',.2f').replace(',', '.')}<br>
-            • Trabalhadores Especializados: {df_mun['Percentual de trabalhadores especializados']:.1f}% do total<br>
-            • Taxa de Desemprego Jovem: {df_mun['Taxa de desemprego dos jovens']:.1f}%
-            """, unsafe_allow_html=True)
+            # Fazer previsão
+            idh_previsto = predict_idh(model, scaler, features, input_data, original_values)
+            
+            # Mostrar IDH Atual
+            col2.metric(
+                "IDH Atual",
+                f"{mun_data['IDH']:.3f}"
+            )
+            
+            # Calcular diferença
+            diferenca = idh_previsto - mun_data['IDH']
+            
+            # Verificar se houve alteração nos valores originais
+            valores_alterados = (
+                pobres != float(mun_data['% de pobres']) or
+                alto_nivel != float(mun_data['Ativos com Alto Nível Educacional']) or
+                medio_nivel != float(mun_data['Ativos com Médio Nível Educacional']) or
+                media_salarial != float(mun_data['Média Salarial'])
+            )
+            
+            # Mostrar IDH Previsto
+            if valores_alterados:
+                # Se houve alterações, mostra a diferença com seta colorida
+                col2.metric(
+                    "IDH Previsto",
+                    f"{idh_previsto:.3f}",
+                    f"{diferenca:.3f}"
+                )
+            else:
+                # Se não houve alterações, mostra apenas o valor igual ao atual sem seta
+                col2.metric(
+                    "IDH Previsto",
+                    f"{mun_data['IDH']:.3f}",
+                    None
+                )
+
+        # FINAL DA SEÇÃO DO SIMULADOR
