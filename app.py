@@ -4,6 +4,7 @@ import streamlit as st
 st.set_page_config(page_title="PredictGov", page_icon="📊", layout="wide")
 
 import pandas as pd
+from utils.data_prep import *
 import plotly.express as px
 import locale
 from streamlit_extras.metric_cards import style_metric_cards
