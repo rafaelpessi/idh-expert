@@ -3,6 +3,19 @@ import streamlit as st
 # Configuração da página
 st.set_page_config(page_title="PredictGov", page_icon="📊", layout="wide")
 
+# Script global para controle de scroll com delay
+st.markdown("""
+    <script>
+        function forceScrollToTop() {
+            setTimeout(function() {
+                window.scrollTo(0, 0);
+                document.body.scrollTop = 0;
+                document.documentElement.scrollTop = 0;
+            }, 100);
+        }
+    </script>
+""", unsafe_allow_html=True)
+
 import pandas as pd
 from utils.data_prep import *
 import plotly.express as px
@@ -365,7 +378,7 @@ elif st.session_state.page == 'filter_state':
             if st.button(f"Ver detalhes - {row['Município']}", key=f"btn_{idx}"):
                 st.session_state.page = 'municipality_detail'
                 st.session_state.selected_municipality = row['Município']
-                st.session_state.scroll_to_top = True
+                st.markdown('<script>forceScrollToTop();</script>', unsafe_allow_html=True)
                 st.rerun()
 
 
@@ -387,8 +400,10 @@ elif st.session_state.page == 'filter_state':
 # INÍCIO DA VISUALIZAÇÃO POR MUNICÍPIO
 
 elif st.session_state.page == 'municipality_detail':
-    # Criar uma âncora no topo
-    top_anchor = st.empty()
+    # Componente invisível no topo absoluto
+    st.markdown('<div style="position: absolute; top: 0;"></div>', unsafe_allow_html=True)
+    st.markdown('<script>forceScrollToTop();</script>', unsafe_allow_html=True)
+
     st.title("Análise Detalhada do Município")
     
     if st.session_state.selected_municipality:
