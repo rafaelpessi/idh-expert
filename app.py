@@ -1,4 +1,8 @@
 import streamlit as st
+
+# Configuração da página
+st.set_page_config(page_title="PredictGov", page_icon="📊", layout="wide")
+
 import pandas as pd
 import plotly.express as px
 import locale
@@ -7,8 +11,17 @@ import plotly.graph_objects as go
 from models.xgb_model import train_model, predict_idh
 from utils.data_prep import load_and_filter_data, get_municipality_data
 
-# Configuração da página
-st.set_page_config(page_title="PredictGov", page_icon="📊", layout="wide")
+# Cache para o modelo e dados
+@st.cache_resource
+def load_model():
+    df_filtered = load_and_filter_data('df_exported.csv')
+    model, scaler, features, original_values = train_model(df_filtered)
+    return model, scaler, features, original_values, df_filtered
+
+# Carregar modelo uma única vez
+model, scaler, features, original_values, df_filtered = load_model()
+
+
 
 # Inicialização do estado da página
 if 'page' not in st.session_state:
@@ -777,8 +790,8 @@ elif st.session_state.page == 'municipality_detail':
         st.markdown("<p style='font-size: 1.1rem; font-weight: bold;'>Simulador de Investimentos</p>", unsafe_allow_html=True)
 
         # Carregar e treinar modelo
-        df_filtered = load_and_filter_data('df_exported.csv')
-        model, scaler, features, original_values = train_model(df_filtered)
+        #df_filtered = load_and_filter_data('df_exported.csv')
+        #model, scaler, features, original_values = train_model(df_filtered)
 
         # Dados atuais do município
         mun_data = get_municipality_data(df_filtered, st.session_state.selected_municipality)

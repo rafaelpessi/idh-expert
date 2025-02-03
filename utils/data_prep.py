@@ -1,4 +1,5 @@
 import pandas as pd
+import streamlit as st
 
 def load_and_filter_data(path):
     # Carregar dados
@@ -9,7 +10,6 @@ def load_and_filter_data(path):
     
     return df_filtered
 
+@st.cache_data
 def get_municipality_data(df, municipality):
-    # Verificar nome correto da coluna
-    # return df[df['Município'] == municipality].iloc[0]  # versão antiga
-    return df[df['nomeLocalidade'] == municipality].iloc[0]  # nova versão
+    return df[df['nomeLocalidade'] == municipality].iloc[0]
