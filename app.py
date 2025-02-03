@@ -29,9 +29,12 @@ with st.spinner('Carregando dados...'):
 with st.spinner('Preparando modelo...'):
     model, scaler, features, original_values = prepare_model(df_filtered)
 
-# Inicialização do estado da página
+# Inicialização do session state
 if 'page' not in st.session_state:
     st.session_state.page = 'home'
+
+if 'scroll_to_top' not in st.session_state:
+    st.session_state.scroll_to_top = False
 
 if 'selected_municipality' not in st.session_state:
     st.session_state.selected_municipality = None
@@ -362,16 +365,9 @@ elif st.session_state.page == 'filter_state':
             if st.button(f"Ver detalhes - {row['Município']}", key=f"btn_{idx}"):
                 st.session_state.page = 'municipality_detail'
                 st.session_state.selected_municipality = row['Município']
-                # Adicionar JavaScript para scroll ao topo
-                st.markdown(
-                    """
-                    <script>
-                        window.scrollTo(0, 0);
-                    </script>
-                    """,
-                    unsafe_allow_html=True
-                )
+                st.session_state.scroll_to_top = True
                 st.rerun()
+
 
         st.markdown("""
         **Critérios de seleção:**
@@ -391,6 +387,8 @@ elif st.session_state.page == 'filter_state':
 # INÍCIO DA VISUALIZAÇÃO POR MUNICÍPIO
 
 elif st.session_state.page == 'municipality_detail':
+    # Criar uma âncora no topo
+    top_anchor = st.empty()
     st.title("Análise Detalhada do Município")
     
     if st.session_state.selected_municipality:
