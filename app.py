@@ -362,6 +362,15 @@ elif st.session_state.page == 'filter_state':
             if st.button(f"Ver detalhes - {row['Município']}", key=f"btn_{idx}"):
                 st.session_state.page = 'municipality_detail'
                 st.session_state.selected_municipality = row['Município']
+                # Adicionar JavaScript para scroll ao topo
+                st.markdown(
+                    """
+                    <script>
+                        window.scrollTo(0, 0);
+                    </script>
+                    """,
+                    unsafe_allow_html=True
+                )
                 st.rerun()
 
         st.markdown("""
