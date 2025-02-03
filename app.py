@@ -177,16 +177,19 @@ if st.session_state.page == 'home':
 
     style_metric_cards()
 
-    col_btn1, col_btn2 = st.columns(2)
-    with col_btn1:
-        if st.button("🏠 Filtrar por Estado", key="filtrar_por_estado", use_container_width=True):
-            st.session_state.page = "filter_state"
-            st.rerun()
-            
-    with col_btn2:
-        if st.button("🔍 Filtrar por Município", key="filtrar_por_municipio", use_container_width=True):
-            st.session_state.page = "filter_city"
-            st.rerun()
+    if st.button("🏠 Filtrar por Estado", key="filtrar_por_estado", use_container_width=True):
+        st.session_state.page = "filter_state"
+        # Adicionar JavaScript para scroll ao topo
+        st.markdown(
+            """
+            <script>
+                window.scrollTo(0, 0);
+            </script>
+            """,
+            unsafe_allow_html=True
+        )
+        st.rerun()
+
 
 # INÍCIO DA VISUALIZAÇÃO POR ESTADO
 
