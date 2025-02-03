@@ -116,8 +116,8 @@ df = load_data()
 # Lógica de navegação entre páginas
 if st.session_state.page == 'home':
     # Página inicial
-    st.title('PredictGov | Otimizando Investimentos Municipais')
-    st.write('Explore dados e preveja investimentos para aumentar o IDH dos municípios brasileiros.')
+    st.title('PredictGov')
+    st.write('Explore dados e obtenha insights para aumentar o IDH dos municípios brasileiros.')
 
     # Criar duas colunas principais com proporção ajustada e gap maior
     col_graficos, col_metricas = st.columns([0.65, 0.35], gap="large")
@@ -818,7 +818,7 @@ elif st.session_state.page == 'municipality_detail':
             st.session_state.media_salarial = float(mun_data['Média Salarial'])
 
         # Título da seção
-        st.markdown("<p style='font-size: 1.1rem; font-weight: bold;'>Simulador de Investimentos</p>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size: 1.1rem; font-weight: bold;'>Simulador de Impacto por Indicador Relevante</p>", unsafe_allow_html=True)
 
         # Carregar e treinar modelo
         #df_filtered = load_and_filter_data('df_exported.csv')
