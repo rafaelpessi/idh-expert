@@ -11,17 +11,22 @@ import plotly.graph_objects as go
 from models.xgb_model import train_model, predict_idh
 from utils.data_prep import load_and_filter_data, get_municipality_data
 
-# Cache para o modelo e dados
+@st.cache_data
+def load_data():
+    return pd.read_csv('df_exported.csv')
+
 @st.cache_resource
-def load_model():
-    df_filtered = load_and_filter_data('df_exported.csv')
+def prepare_model(df_filtered):
     model, scaler, features, original_values = train_model(df_filtered)
-    return model, scaler, features, original_values, df_filtered
+    return model, scaler, features, original_values
 
-# Carregar modelo uma única vez
-model, scaler, features, original_values, df_filtered = load_model()
-
-
+# Carregar dados e modelo com indicadores de progresso
+with st.spinner('Carregando dados...'):
+    df = load_data()
+    df_filtered = df[df['População residente'] <= 100000].copy()
+    
+with st.spinner('Preparando modelo...'):
+    model, scaler, features, original_values = prepare_model(df_filtered)
 
 # Inicialização do estado da página
 if 'page' not in st.session_state:
