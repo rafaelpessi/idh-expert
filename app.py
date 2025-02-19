@@ -116,7 +116,7 @@ df = load_data()
 # Lógica de navegação entre páginas
 if st.session_state.page == 'home':
     # Página inicial
-    st.title('PredictGov')
+    st.title('IDHCern')
     st.write('Explore dados e obtenha insights para aumentar o IDH dos municípios brasileiros.')
 
     # Criar duas colunas principais com proporção ajustada e gap maior
@@ -357,6 +357,13 @@ elif st.session_state.page == 'filter_state':
         # Exibir a tabela com configurações visuais melhoradas
         st.write("Top 10 municípios com maior potencial de melhoria do IDH através de investimentos:")
 
+        st.markdown("""
+        **Critérios de seleção:**
+        - IDH mais baixo (50% do peso)
+        - Menor percentual de pobres (30% do peso)
+        - Menor população (20% do peso)
+        """)
+
         # Configurar e exibir o dataframe
         st.dataframe(
             df_top10.set_index('estado'),
@@ -380,14 +387,6 @@ elif st.session_state.page == 'filter_state':
                 st.session_state.selected_municipality = row['Município']
                 st.markdown('<script>forceScrollToTop();</script>', unsafe_allow_html=True)
                 st.rerun()
-
-
-        st.markdown("""
-        **Critérios de seleção:**
-        - IDH mais baixo (50% do peso)
-        - Menor percentual de pobres (30% do peso)
-        - Menor população (20% do peso)
-        """)
 
         st.markdown("---")
 
