@@ -357,6 +357,7 @@ elif st.session_state.page == 'filter_state':
         # Exibir a tabela com configurações visuais melhoradas
         st.write("Top 10 municípios com maior potencial de melhoria do IDH através de investimentos:")
 
+        # Textos explicativos
         st.markdown("""
         **Critérios de seleção:**
         - IDH mais baixo (50% do peso)
