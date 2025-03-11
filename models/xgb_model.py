@@ -1,53 +1,37 @@
-import pandas as pd
+import xgboost as xgb
+import pickle
 import numpy as np
-from xgboost import XGBRegressor
 from sklearn.preprocessing import StandardScaler
 
-def train_model(df):
-    # Features selecionadas
+def load_trained_model():
+    # Carregar o modelo salvo em formato JSON dentro da pasta models
+    model = xgb.Booster()
+    model.load_model('models/modelo_idh_xgboost_6vars_scaled.json')  # Caminho atualizado
+    
+    # Carregar o scaler dentro da pasta models
+    with open('models/scaler_6vars.pkl', 'rb') as f:
+        scaler = pickle.load(f)
+    
+    # Definir as features usadas no modelo
     features = [
-        'Ativos com Alto Nível Educacional',
-        'Ativos com Médio Nível Educacional',
-        'Ativos com Baixo Nível Educacional',
         '% de pobres',
-        'Média Salarial'
+        'Ativos com Alto Nível Educacional',
+        'Produtividade',
+        'Médicos por milhares de habitantes',
+        'Média Salarial',
+        'PIB Municipal'
     ]
     
-    # Preparar dados
-    X = df[features]
-    y = df['IDH']
-    
-    # Normalizar
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
-    
-    # Treinar modelo
-    model = XGBRegressor(
-        max_depth=5,
-        learning_rate=0.05,
-        n_estimators=200,
-        random_state=42
-    )
-    model.fit(X_scaled, y)
-    
-    # Armazenar valores originais
-    original_values = df[features + ['IDH']].copy()
-    
-    return model, scaler, features, original_values
+    return model, scaler, features
 
-def predict_idh(model, scaler, features, input_data, original_values):
-    # Encontrar o município correspondente nos valores originais
-    municipality_data = original_values[
-        (original_values[features] == input_data[features].values[0]).all(axis=1)
-    ]
-    
-    # Se encontrar uma correspondência exata, retorna o IDH original
-    if len(municipality_data) > 0:
-        return municipality_data['IDH'].values[0]
-    
-    # Caso contrário, faz a predição normal
-    # Garantir que input_data tenha os nomes das features corretos
-    X = pd.DataFrame(input_data[features].values, columns=features)
-    input_scaled = scaler.transform(X)
-    prediction = model.predict(input_scaled)[0]
-    return prediction
+def predict_idh(model, scaler, features, input_data):
+    # Garantir que input_data tenha as colunas corretas na ordem esperada
+    input_data_scaled = scaler.transform(input_data[features])
+    dmatrix = xgb.DMatrix(input_data_scaled, feature_names=features)
+    prediction = model.predict(dmatrix)
+    return prediction[0]  # Retorna o valor previsto para o primeiro (e único) registro
+
+# Função opcional para validação com valores originais (se necessário)
+def validate_with_original_data(model, scaler, features, df):
+    original_values = df[features + ['IDH']].copy()
+    return original_values
