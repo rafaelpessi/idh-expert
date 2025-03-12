@@ -1,7 +1,7 @@
 import streamlit as st
 
 # Configuração da página
-st.set_page_config(page_title="PredictGov", page_icon="📊", layout="wide")
+st.set_page_config(page_title="IDH Expert", page_icon="📊", layout="wide")
 
 # Script global para controle de scroll com delay
 st.markdown("""
@@ -83,7 +83,7 @@ df = load_data()
 # Lógica de navegação entre páginas
 if st.session_state.page == 'home':
     # Página inicial
-    st.title('IDHCern')
+    st.title('IDH Expert')
     st.write('Explore dados e obtenha insights para aumentar o IDH dos municípios brasileiros.')
 
     # Criar duas colunas principais com proporção ajustada e gap maior
