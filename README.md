@@ -91,7 +91,7 @@ Os indicadores foram gerados a partir de:
 Este projeto é aberto para contribuições! Se desejar adicionar funcionalidades (ex.: novos indicadores ou visualizações), envie um pull request ou abra uma issue no GitHub.
 
 ## Licença
-Este projeto é licenciado sob a [MIT License](LICENSE) - veja o arquivo [LICENSE](LICENSE) para detalhes. (Nota: Crie um arquivo `LICENSE` se desejar usar a MIT ou outra licença.)
+Este projeto está licenciado sob a [Licença MIT](LICENSE.md).
 
 ## Agradecimentos
 - Agradecimentos à escola por fornecer os dados validados e à comunidade acadêmica por disponibilizar dados públicos.
