@@ -42,7 +42,7 @@ streamlit run app.py
 ``````
 
 ## Uso
-- **Online**: Acesse o app diretamente em [https://predictgov-39xjudj86hquc594kp2fur.streamlit.app/] (atualize com o URL após o deploy).
+- **Online**: Acesse o app diretamente em [https://idh-expert-yvanrherzhsbjumifmwps6.streamlit.app/] (atualize com o URL após o deploy).
 - **Localmente**: Após a instalação, o app abrirá no seu navegador padrão. Explore as páginas "Home" (gráfico por estado), "Filtrar por Estado" (seleção de município) e "Detalhes do Município" (análise e simulação).
 - **Simulador**: Ajuste os sliders na página de detalhes para ver como mudanças em indicadores afetam o IDH previsto.
 
