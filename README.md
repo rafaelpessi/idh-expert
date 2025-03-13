@@ -17,7 +17,7 @@ O IDH Expert é um aplicativo web desenvolvido como projeto acadêmico para anal
 ## Instalação
 1. Clone o repositório:
 ``````
-git clone https://github.com/seu-usuario/idh-expert.git
+git clone https://github.com/rafaelpessi/idh-expert
 cd idh-expert
 ``````
 
